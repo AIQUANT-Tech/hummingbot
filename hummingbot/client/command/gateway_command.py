@@ -448,6 +448,7 @@ class GatewayCommand(GatewayChainApiManager):
         self.notify("Updating gateway balances, please wait...")
         conf: Optional[Dict[str, str]] = GatewayConnectionSetting.get_connector_spec_from_market_name(
             exchange_name)
+        # print(conf)
         if conf is None:
             self.notify(
                 f"'{exchange_name}' is not available. You can add and review exchange with 'gateway connect'.")
@@ -455,6 +456,7 @@ class GatewayCommand(GatewayChainApiManager):
             chain, network, address = (
                 conf["chain"], conf["network"], conf["wallet_address"]
             )
+
             tokens_str = conf.get("tokens", "")
             tokens = [token.strip() for token in tokens_str.split(',')] if tokens_str else []
 
@@ -468,12 +470,13 @@ class GatewayCommand(GatewayChainApiManager):
 
             connector = connector_chain_network[0]['connector']
             exchange_key = f"{connector}_{chain}_{network}"
+            # print(exchange_key)
 
             try:
                 single_ex_bal = await asyncio.wait_for(
                     self.single_balance_exc(exchange_name, self.client_config_map), network_timeout
                 )
-
+                print(single_ex_bal)
                 allowance_resp = await gateway_instance.get_allowances(
                     chain, network, address, tokens, connector_chain_network[0]["connector"], fail_silently=True
                 )
@@ -481,14 +484,18 @@ class GatewayCommand(GatewayChainApiManager):
                 rows = []
                 for exchange, bals in single_ex_bal.items():
                     if exchange_key == exchange:
+                        print("exchange_key", exchange_key)
                         rows = []
                         for token, bal in bals.items():
                             # Handle errors in allowance_responses_list
                             if allowance_resp.get("approvals") is None:
                                 allowance = Decimal("0")
+
+                            elif chain == "cardano":
+                                allowance = Decimal("0")
                             else:
                                 allowance = allowance_resp["approvals"].get(token, Decimal("0"))
-
+                        
                             rows.append({
                                 "Symbol": token.upper(),
                                 "Balance": PerformanceMetrics.smart_round(Decimal(str(bal)), 4),
@@ -555,13 +562,18 @@ class GatewayCommand(GatewayChainApiManager):
                 chain, network, address, connector = conf["chain"], conf["network"], conf["wallet_address"], conf["connector"]
                 exchange_key = f'{connector}_{chain}_{network}'
                 exchange_found = False
+                
                 for exchange, bals in bal_resp.items():
+                    # self.notify(f"\nConnector: {exchange_key}")
+                    # self.notify(f"Exchange: {exchange}")
                     if exchange_key == exchange:
                         exchange_found = True
                         rows = []
                         for token, bal in bals.items():
                             # Handle errors in allowance_responses_list
                             if allowance_responses_list[index].get("approvals") is None:
+                                allowance = Decimal("0")
+                            elif chain == "cardano":
                                 allowance = Decimal("0")
                             else:
                                 allowance = allowance_responses_list[index]["approvals"].get(token, Decimal("0"))
@@ -600,18 +612,20 @@ class GatewayCommand(GatewayChainApiManager):
         conn_setting = AllConnectorSettings.get_connector_settings()[exchange]
         if api_details or conn_setting.uses_gateway_generic_connector():
             connector_class = get_connector_class(exchange)
+            # print("connector class", connector_class)
             read_only_client_config = ReadOnlyClientConfigAdapter.lock_config(
                 client_config_map)
+            # print("read_only_client_config", read_only_client_config)
             init_params = conn_setting.conn_init_parameters(
                 trading_pairs=gateway_connector_trading_pairs(
                     conn_setting.name),
                 api_keys=api_details,
                 client_config_map=read_only_client_config,
             )
-
             # collect trading pairs from the gateway connector settings
             trading_pairs: List[str] = gateway_connector_trading_pairs(
                 conn_setting.name)
+            
 
             # collect unique trading pairs that are for balance reporting only
             if conn_setting.uses_gateway_generic_connector():
@@ -645,12 +659,15 @@ class GatewayCommand(GatewayChainApiManager):
     async def add_gateway_exchange(self, exchange, client_config_map: ClientConfigMap, **api_details) -> Optional[str]:
         self._market.pop(exchange, None)
         is_gateway_markets = self.is_gateway_markets(exchange)
+        print("is_gateway_markets", is_gateway_markets)
         if is_gateway_markets:
             market = GatewayCommand.connect_markets(
                 exchange, client_config_map, **api_details)
+            # print("market", market)
             if not market:
                 return "API keys have not been added."
             err_msg = await GatewayCommand._update_balances(market)
+            print("err_msg", err_msg)
             if err_msg is None:
                 self._market[exchange] = market
             return err_msg
@@ -662,6 +679,8 @@ class GatewayCommand(GatewayChainApiManager):
 
     async def update_exchange_balances(self, exchange_name: str, client_config_map: ClientConfigMap) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
         is_gateway_markets = self.is_gateway_markets(exchange_name)
+        print(is_gateway_markets)
+        print(exchange_name in self._market)
         if is_gateway_markets and exchange_name in self._market:
             del self._market[exchange_name]
         if exchange_name in self._market:
@@ -670,7 +689,9 @@ class GatewayCommand(GatewayChainApiManager):
             await Security.wait_til_decryption_done()
             api_keys = Security.api_keys(
                 exchange_name) if not is_gateway_markets else {}
-            return await self.add_gateway_exchange(exchange_name, client_config_map, **api_keys)
+            return_val =  await self.add_gateway_exchange(exchange_name, client_config_map, **api_keys)
+            print("return_val", return_val)
+            return return_val
 
     @staticmethod
     @lru_cache(maxsize=10)
@@ -744,7 +765,10 @@ class GatewayCommand(GatewayChainApiManager):
 
     async def single_balance_exc(self, exchange, client_config_map: ClientConfigMap) -> Dict[str, Dict[str, Decimal]]:
         # Waits for the update_exchange method to complete with the provided client_config_map
+        print("exchange", exchange)
+        print("before updating exchange market is", self._market)
         await self.update_exch(exchange, client_config_map)
+        print("after updating exchange market is", self._market)
         return {k: v.get_all_balances() for k, v in sorted(self._market.items(), key=lambda x: x[0])}
 
     async def _show_gateway_connector_tokens(
