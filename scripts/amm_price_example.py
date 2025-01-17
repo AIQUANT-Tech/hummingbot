@@ -1,6 +1,7 @@
 import os
+import asyncio
 from decimal import Decimal
-from pydantic import Field
+from pydantic import Field # type: ignore
 from hummingbot.client.config.config_data_types import BaseClientModel, ClientFieldData
 from hummingbot.core.event.events import TradeType
 from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
@@ -60,6 +61,8 @@ class AmmPriceExample(ScriptStrategyBase):
             amount = data.get("amount", "N/A")
             rawAmount = data.get("rawAmount", "N/A")
             self.logger().info(f"Price: {price}, Amount: {amount}, rawAmount:{rawAmount}")
+            self.logger().info("Waiting for 1 minutes before next fetch...")
+            await asyncio.sleep(60)  # 1 minutes sleep
         except Exception as e:
             self.logger().error(f"Error fetching price: {str(e)}")
         finally:

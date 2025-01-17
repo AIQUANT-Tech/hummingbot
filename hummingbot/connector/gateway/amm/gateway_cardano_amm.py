@@ -47,6 +47,8 @@ class GatewayCardanoAMM(ConnectorBase):
     _tokens: Set[str]
     _amount_quantum_dict: Dict[str, Decimal]
     _last_poll_timestamp: float
+    _poll_notifier: Optional[asyncio.Event]
+
     def __init__(self,
                 client_config_map: "ClientConfigAdapter",
                  connector_name: str,
@@ -69,6 +71,7 @@ class GatewayCardanoAMM(ConnectorBase):
         self._chain_info = {}
         self._last_balance_poll_timestamp = time.time()
         self._tokens = set()
+        self._poll_notifier = None
         [self._tokens.update(set(trading_pair.split("_")[0].split("-"))) for trading_pair in trading_pairs]
         self._order_tracker: ClientOrderTracker = ClientOrderTracker(connector=self, lost_order_count_limit=10)
         self._amount_quantum_dict = {}

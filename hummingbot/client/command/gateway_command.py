@@ -682,8 +682,7 @@ class GatewayCommand(GatewayChainApiManager):
             await Security.wait_til_decryption_done()
             api_keys = Security.api_keys(
                 exchange_name) if not is_gateway_markets else {}
-            return_val =  await self.add_gateway_exchange(exchange_name, client_config_map, **api_keys)
-            return return_val
+            return await self.add_gateway_exchange(exchange_name, client_config_map, **api_keys)
 
     @staticmethod
     @lru_cache(maxsize=10)
